@@ -4,7 +4,7 @@ This Repository contains scripts I have written to scrape, process and analyze S
 
 ## Contents
 
-`mae_ocr.py` - OCR for _Sborniki muzej antropologii i etnografii AN SSSR_ (MAE) with PyMuPDF and Tesseract engine \
+`mae_ocr.py` - OCR for _Sborniki muzej antropologii i etnografii_ (MAE) with PyMuPDF and Tesseract engine \
 `mae_ocr-env.yml` - Anaconda environment file for MAE OCR \
 `se_ner.ipynb` - Named Entitiy Recognition for _Sovetskaya etnografiya_ (SE) with SpaCy \
 `se_ner-env.yml` - Anaconda environment file for SE NER \
