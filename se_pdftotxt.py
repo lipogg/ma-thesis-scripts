@@ -1,4 +1,4 @@
-# Convert machine readable PDF to textfiles 
+# Convert machine readable PDF to textfiles, for journal Sovetskaya etnografiya
 
 import fitz
 import glob 
@@ -8,7 +8,7 @@ dir = os.getcwd()
 outdirname = 'textfiles'
 outdir = os.path.join(dir, outdirname)
 print(outdir)
-os.makedirs(outdir) #error handling einbauen falls der ordner schon existiert  
+os.makedirs(outdir) 
 
 
 for filepath in glob.glob(dir+'/pdfs/*.pdf'): 
@@ -16,7 +16,7 @@ for filepath in glob.glob(dir+'/pdfs/*.pdf'):
     outfilepath = os.path.join(outdir, filename.replace('.pdf', '.txt')) 
     with fitz.open(filepath) as f:
         for page in f: 
-            pagetext = page.get_text(flags=16) #defaulting to "simple" mode; try also "block" and "layout": https://pymupdf.readthedocs.io/en/latest/module.html
+            pagetext = page.get_text(flags=16) # defaulting to "simple" mode; try also "block" and "layout": https://pymupdf.readthedocs.io/en/latest/module.html
             outfile = open(outfilepath, 'a')
             outfile.writelines(pagetext)
             outfile.close()  
