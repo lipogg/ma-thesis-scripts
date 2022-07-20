@@ -1,4 +1,4 @@
-name: pymupdf-ocr
+name: mae_ocr-env
 channels:
   - conda-forge
   - defaults
@@ -29,4 +29,4 @@ dependencies:
   - xz=5.2.5=haf1e3a3_1
   - zlib=1.2.11=h6c3fc93_1014
   - zstd=1.5.2=h582d3a0_0
-prefix: /opt/anaconda3/envs/pymupdf-ocr
+prefix: /opt/anaconda3/envs/mae_ocr-env
