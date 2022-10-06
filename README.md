@@ -4,6 +4,7 @@ This Repository contains scripts I have written to scrape, process and analyze S
 
 ## Contents
 
+`qde-parser.R` - Parse REFI-QDA XML files and extract code co-occurrence edgelists for import in R Shiny App
 `mae_ocr.py` - OCR for _Sborniki muzej antropologii i etnografii_ (MAE) with PyMuPDF and Tesseract engine \
 `mae_ocr-env.yml` - Anaconda environment file for MAE OCR \
 `se_ner.ipynb` - Named Entitiy Recognition for _Sovetskaya etnografiya_ (SE) with SpaCy \
