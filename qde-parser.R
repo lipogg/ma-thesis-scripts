@@ -1,7 +1,6 @@
 # Lisa Poggel 
 # 12.9.2022
-# Extract code co-occurrence data from REFi-QDA xml for import into R shiny app 
-
+# Extract code co-occurrence data from REFI-QDA xml for import into R shiny app 
 
 library(xml2)
 library(purrr)
@@ -130,7 +129,7 @@ create_edgelist <- function(x_selections, y_selections) { # takes two lists of p
 
 
 # Replace ids with names in edgelists and return named edgelist
-# Automatically adds group column to final dataframe
+# Automatically adds group column to final df
 prettify_edgelist <- function(x_y_edgelist) {
   # get nodelists for both input categories
   searchstr <- deparse(substitute(x_y_edgelist)) # make variable name string
@@ -153,27 +152,53 @@ prettify_edgelist <- function(x_y_edgelist) {
   return(edgelist_names)
 }
 
+# Replace ids with names in unipartite edgelists and return named edgelist
+# and remove loops. Automatically adds group column to final df
+prettify_edgelist_unipartite <- function(x_y_z_edgelist) {
+  # get nodelists for both input categories
+  searchstr <- deparse(substitute(x_y_z_edgelist)) # make variable name string
+  x <- str_match_all(searchstr, "[^_]*")[[1]][1,1] # access first match = same as second match
+  z <- str_match_all(searchstr, "[^_]*")[[1]][5,1] # access third match
+  x_nodelist <- eval(parse(text=paste0(x, "_nodelist"))) # get nodelist for category x; eval(parse()) converts string to variable name
+  z_nodelist <- eval(parse(text=paste0(z, "_nodelist"))) # get nodelist for category y
+  # combine nodelists
+  combined_nodelist <- rbind(x_nodelist, z_nodelist) 
+  # replace ids of first input category with labels
+  colnames(combined_nodelist)[1] <- "source"
+  edgelist_names <- left_join(x_y_z_edgelist,  combined_nodelist, by = "source") # left join drops rows from combined_nodelist that do not match x_y_edgelist by column "source" 
+  edgelist_names$source <- edgelist_names$label
+  # replace ids of second input category with labels
+  colnames(combined_nodelist)[1] <- "target"
+  edgelist_target_names <- left_join(x_y_z_edgelist,  combined_nodelist, by = "target") 
+  edgelist_names$target <- edgelist_target_names$label
+  # clean up renamed edgelist
+  edgelist_names$label <- NULL
+  return(edgelist_names)
+}
+
 # Add edge attributes to edgelist by joining the prettified edgelists of tj,ntj, ag
 # and tpi, tos, rel edges. Compare startpos of each row in edgelists of tj, ntj, ag 
-# with startpos of tos_selections, tpi_selections, rel_selections, rrel_selections. 
+# with startpos of tos_selections, tpi_selections, ppr_selections and rel_selections. 
 # If startposmatches, add the matching category name as attribute to edgelist. 
 add_attributes <- function(x_y_edgelist) {
   # get first category name as string: need this to get edgelists
   searchstr <- deparse(substitute(x_y_edgelist)) # make variable name string
   x <- str_match_all(searchstr, "[^_]*")[[1]][1,1] # access first match
   y <- str_match_all(searchstr, "[^_]*")[[1]][3,1] # access second match
-  # add tempi column, then type of statement column, then relations column
+  # add tempi column, then type of statement column, then past-present relation column
   x_y_edgelist <- x_y_edgelist %>% left_join(eval(parse(text=paste0(x, "_tpi_edgelist"))), by=c("source", "startpos", "issue", "group")) %>%
-    left_join(eval(parse(text=paste0(x, "_tos_edgelist"))), by=c("source", "startpos", "issue", "group"))
+    left_join(eval(parse(text=paste0(x, "_tos_edgelist"))), by=c("source", "startpos", "issue", "group")) %>%
+    left_join(eval(parse(text=paste0(x, "_ppr_edgelist"))), by=c("source", "startpos", "issue", "group"))
   # add relations column only for feature edgelist
   if(y == "fts"){
     x_y_edgelist <- left_join(x_y_edgelist, eval(parse(text=paste0(x, "_rel_edgelist"))), by=c("source", "startpos", "issue", "group"))
-    colnames(x_y_edgelist)[8] <- "relation"
+    colnames(x_y_edgelist)[9] <- "relation"
   } 
   # rename new columns
   colnames(x_y_edgelist)[2] <- "target"
   colnames(x_y_edgelist)[6] <- "tempi"
   colnames(x_y_edgelist)[7] <- "type_of_statement"
+  colnames(x_y_edgelist)[8] <- "past_present_relation"
   return(x_y_edgelist)
 }
 
@@ -184,42 +209,44 @@ add_unipartite_attributes <- function(x_y_z_edgelist) {
   x <- str_match_all(searchstr, "[^_]*")[[1]][1,1] # access first match
   y <- str_match_all(searchstr, "[^_]*")[[1]][3,1] # access second match
   z <- str_match_all(searchstr, "[^_]*")[[1]][5,1] # access third match
-  # add tempi column, then type of statement column, then relations column
+  # add tempi column, then type of statement column, then past-present relation column
   x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_tpi_edgelist"))), by=c("source", "startpos", "issue", "group")) %>%
-    left_join(eval(parse(text=paste0(x, "_tos_edgelist"))), by=c("source", "startpos", "issue", "group"))
+    left_join(eval(parse(text=paste0(x, "_tos_edgelist"))), by=c("source", "startpos", "issue", "group")) %>%
+    left_join(eval(parse(text=paste0(x, "_ppr_edgelist"))), by=c("source", "startpos", "issue", "group"))
   # rename new columns
   colnames(x_y_z_edgelist)[6] <- "tempi"
   colnames(x_y_z_edgelist)[7] <- "type_of_statement"
+  colnames(x_y_z_edgelist)[8] <- "past_present_relation"
   # add edgelist attributes
   if(z == "fts"){
     # add additional relations column only for feature edgelist
-    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_fts_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement"))  
-    colnames(x_y_z_edgelist)[8] <- "feature"
-    colnames(x_y_z_edgelist)[9] <- "relation" # dont need this? 
+    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_fts_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation"))  
+    colnames(x_y_z_edgelist)[9] <- "feature"
+    colnames(x_y_z_edgelist)[10] <- "relation" # dont need this? 
     # drop rows that have NA in feature column
     x_y_z_edgelist <- filter(x_y_z_edgelist, !is.na(feature))
   } 
   if(z == "ats"){
     # add additional feature column only for attribute edgelist
-    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_ats_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement")) %>% 
-      left_join(eval(parse(text=paste0(x, "_fts_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "relation")) 
+    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_ats_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation")) %>% 
+      left_join(eval(parse(text=paste0(x, "_fts_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation")) 
     x_y_z_edgelist$relation <- NULL 
-    colnames(x_y_z_edgelist)[8] <- "attribute"
-    colnames(x_y_z_edgelist)[9] <- "feature"
+    colnames(x_y_z_edgelist)[9] <- "attribute"
+    colnames(x_y_z_edgelist)[10] <- "feature"
     # drop rows that have NA in attribute column
     x_y_z_edgelist <- filter(x_y_z_edgelist, !is.na(attribute))
   } 
   if(z == "nrs"){
     # add additional feature column only for attribute edgelist
-    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_nrs_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement")) 
-    colnames(x_y_z_edgelist)[8] <- "narrative"
+    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_nrs_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation")) 
+    colnames(x_y_z_edgelist)[9] <- "narrative"
     # drop rows that have NA in narrative column
     x_y_z_edgelist <- filter(x_y_z_edgelist, !is.na(narrative))
   }
   if(z == "sh" || z == "psh"){
     # add additional feature column only for attribute edgelist
-    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_", z, "_", "edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement")) 
-    colnames(x_y_z_edgelist)[8] <- "event_or_period"
+    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_", z, "_", "edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation")) 
+    colnames(x_y_z_edgelist)[9] <- "event_or_period"
     # drop rows that have NA in event_or_period column
     x_y_z_edgelist <- filter(x_y_z_edgelist, !is.na(event_or_period))
   }
@@ -235,25 +262,26 @@ add_unipartite_attributes <- function(x_y_z_edgelist) {
 
 
 # Clean unipartite edgelists: remove loops (=nodes matched with themselves) and 
-# duplicates (=duplicate of previous edge with source and target reversed)
+# duplicates (=duplicate of edges with source and target reversed)
 clean_unipartite <- function(edgelist){
-  # remove loops
+  # remove loops: edges where source and target value are the same
   edgelist <- edgelist[edgelist$source!=edgelist$target,]
   # order elements in source and target column alphabetically
   edgelist <- transform(edgelist, source = pmin(source, target), target=pmax(source, target))
   # remove duplicates
-  edgelist <- distinct(edgelist) 
+  edgelist <- edgelist %>% 
+    distinct(across(-group), .keep_all=TRUE) 
   return(edgelist)
 }
 
 # Write ouptut to edgelist or nodelist, using the input variable name as filename
+# Important: this function writes to csv but cannot be piped currently, see https://www.r-bloggers.com/2018/07/writing-pipe-friendly-functions/
 write2csv <- function(edgelist) {
   write.csv2(edgelist, file=paste0(deparse(substitute(edgelist)), ".csv"), row.names=FALSE)
 }
 
 
 # GET NETWORK DATA
-
 ## Read QDE-XML project file
 data <- read_xml("project.qde")
 data%>%xml_ns_strip() # strip namespace for the xml to be parsable
@@ -269,42 +297,38 @@ main_codes <- xml_find_all(codes, "//Codes/Code") # get xml_nodeset of main cate
 tos <- main_codes[1] # get xml_nodeset of main category "Type of Statement"
 tos_nodelist <- create_nodelist(tos)
 # Narratives nodelist
-nrs <- main_codes[4] # get xml_nodeset of main category "Narratives"
+nrs <- main_codes[3] # get xml_nodeset of main category "Narratives"
 nrs_nodelist <- create_nodelist(nrs)
 # Features nodelist: features are a subcategory of "definitions", defs_codes[1]
-defs_codes <- xml_find_all(main_codes[9], "Code")
+defs_codes <- xml_find_all(main_codes[8], "Code")
 fts <- defs_codes[1]
 fts_nodelist <- create_nodelist(fts)
 # Attribute nodelist: attributes are a subcategory of "definitions", defs_codes[2]
 ats <- defs_codes[2]
 ats_nodelist <- create_nodelist(ats)
 # Events, Periods in Soviet History nodelist
-sh <- main_codes[5]
+sh <- main_codes[4]
 sh_nodelist <- create_nodelist(sh)
 # Events, Periods in pre-Soviet History nodelist
-psh <- main_codes[6]
+psh <- main_codes[5]
 psh_nodelist <- create_nodelist(psh)
 # Tempi nodelist
-tpi <- main_codes[7]
+tpi <- main_codes[6]
 tpi_nodelist <- create_nodelist(tpi)
 # Past-Present Relation nodelist
-ppr <- main_codes[8]
+ppr <- main_codes[7]
 ppr_nodelist <- create_nodelist(ppr)
 # Groups,Locations in Tajikistan nodelist
-tj <- main_codes[3]
+tj <- main_codes[2]
 tj_nodelist <- create_nodelist(tj)
 # Groups,Locations outside Tajikistan nodelist
-ntj <- main_codes[10]
+ntj <- main_codes[9]
 ntj_nodelist <- create_nodelist(ntj)
 # Type of Relation between groups nodelist 
-rel <- main_codes[11]
+rel <- main_codes[10]
 rel_nodelist <- create_nodelist(rel)
-# Reason for Relation between groups nodelist 
-rrel <- main_codes[12]
-rrel_nodelist <- create_nodelist(rrel)
 # All groups combined nodelist 
 ag_nodelist <- rbind(tj_nodelist, ntj_nodelist)
-#ag_nodelist
 
 ## Make Edgelists
 
@@ -320,11 +344,10 @@ tos_selections <- filter_selections(tos_nodelist$id)
 tpi_selections <- filter_selections(tpi_nodelist$id)
 ppr_selections <- filter_selections(ppr_nodelist$id)
 rel_selections <- filter_selections(rel_nodelist$id)
-rrel_selections <- filter_selections(rrel_nodelist$id)
 ag_selections <- c(tj_selections, ntj_selections) # all groups and locations combined
 
 # First create edgelists that will be used to add attributes "tempi", 
-# "type of statement", and "relation" to edgelists below
+# "type of statement", "relation" and "past-present relation" to edgelists below
 tj_tpi_edgelist <- create_edgelist(tj_selections, tpi_selections) 
 tj_tpi_edgelist <- prettify_edgelist(tj_tpi_edgelist)
 ntj_tpi_edgelist <- create_edgelist(ntj_selections, tpi_selections) 
@@ -337,6 +360,12 @@ ntj_tos_edgelist <- create_edgelist(ntj_selections, tos_selections)
 ntj_tos_edgelist <- prettify_edgelist(ntj_tos_edgelist)
 ag_tos_edgelist <- create_edgelist(ag_selections, tos_selections)
 ag_tos_edgelist <- prettify_edgelist(ag_tos_edgelist)
+tj_ppr_edgelist <- create_edgelist(tj_selections, ppr_selections) 
+tj_ppr_edgelist <- prettify_edgelist(tj_ppr_edgelist)
+ntj_ppr_edgelist <- create_edgelist(ntj_selections, ppr_selections) 
+ntj_ppr_edgelist <- prettify_edgelist(ntj_ppr_edgelist)
+ag_ppr_edgelist <- create_edgelist(ag_selections, ppr_selections) 
+ag_ppr_edgelist <- prettify_edgelist(ag_ppr_edgelist)
 tj_rel_edgelist <- create_edgelist(tj_selections, rel_selections)
 tj_rel_edgelist <- prettify_edgelist(tj_rel_edgelist)
 ntj_rel_edgelist <- create_edgelist(ntj_selections, rel_selections) 
@@ -347,22 +376,32 @@ fts_tpi_edgelist <- create_edgelist(fts_selections, tpi_selections)
 fts_tpi_edgelist <- prettify_edgelist(fts_tpi_edgelist)
 fts_tos_edgelist <- create_edgelist(fts_selections, tos_selections) 
 fts_tos_edgelist <- prettify_edgelist(fts_tos_edgelist)
+fts_ppr_edgelist <- create_edgelist(fts_selections, ppr_selections) 
+fts_ppr_edgelist <- prettify_edgelist(fts_ppr_edgelist)
 ats_tpi_edgelist <- create_edgelist(ats_selections, tpi_selections) 
 ats_tpi_edgelist <- prettify_edgelist(ats_tpi_edgelist)
 ats_tos_edgelist <- create_edgelist(ats_selections, tos_selections) 
 ats_tos_edgelist <- prettify_edgelist(ats_tos_edgelist)
+ats_ppr_edgelist <- create_edgelist(ats_selections, ppr_selections) 
+ats_ppr_edgelist <- prettify_edgelist(ats_ppr_edgelist)
 nrs_tpi_edgelist <- create_edgelist(nrs_selections, tpi_selections) 
 nrs_tpi_edgelist <- prettify_edgelist(nrs_tpi_edgelist)
 nrs_tos_edgelist <- create_edgelist(nrs_selections, tos_selections) 
 nrs_tos_edgelist <- prettify_edgelist(nrs_tos_edgelist)
+nrs_ppr_edgelist <- create_edgelist(nrs_selections, ppr_selections) 
+nrs_ppr_edgelist <- prettify_edgelist(nrs_ppr_edgelist)
 sh_tpi_edgelist <- create_edgelist(sh_selections, tpi_selections) 
 sh_tpi_edgelist <- prettify_edgelist(sh_tpi_edgelist)
 sh_tos_edgelist <- create_edgelist(sh_selections, tos_selections) 
 sh_tos_edgelist <- prettify_edgelist(sh_tos_edgelist)
+sh_ppr_edgelist <- create_edgelist(sh_selections, ppr_selections) 
+sh_ppr_edgelist <- prettify_edgelist(sh_ppr_edgelist)
 psh_tpi_edgelist <- create_edgelist(psh_selections, tpi_selections) 
 psh_tpi_edgelist <- prettify_edgelist(psh_tpi_edgelist)
 psh_tos_edgelist <- create_edgelist(psh_selections, tos_selections) 
 psh_tos_edgelist <- prettify_edgelist(psh_tos_edgelist)
+psh_ppr_edgelist <- create_edgelist(psh_selections, ppr_selections) 
+psh_ppr_edgelist <- prettify_edgelist(psh_ppr_edgelist)
 
 
 # Create edgelists for bipartite network visualizations, add attributes
@@ -412,72 +451,91 @@ ag_psh_edgelist <- create_edgelist(ag_selections, psh_selections)
 ag_psh_edgelist <- prettify_edgelist(ag_psh_edgelist)
 ag_psh_edgelist <- add_attributes(ag_psh_edgelist)
 
+# Create additional edgelists for category-category bipartite network visualizations (not for import in Shiny app)
+sh_nrs_edgelist <- create_edgelist(sh_selections, nrs_selections) 
+sh_nrs_edgelist <- prettify_edgelist(sh_nrs_edgelist)
+sh_nrs_edgelist <- add_attributes(sh_nrs_edgelist)
+sh_psh_edgelist <- create_edgelist(sh_selections, psh_selections) 
+sh_psh_edgelist <- prettify_edgelist(sh_psh_edgelist)
+sh_psh_edgelist <- add_attributes(sh_psh_edgelist)
+ats_rel_edgelist <- create_edgelist(ats_selections, rel_selections)  
+ats_rel_edgelist <- prettify_edgelist(ats_rel_edgelist)
+ats_fts_edgelist <- create_edgelist(ats_selections, fts_selections) 
+ats_fts_edgelist <- prettify_edgelist(ats_fts_edgelist)
+ats_fts_edgelist <- add_attributes(ats_fts_edgelist)
+nrs_rel_edgelist <- create_edgelist(nrs_selections, rel_selections)
+nrs_rel_edgelist <- prettify_edgelist(nrs_rel_edgelist)
+nrs_fts_edgelist <- create_edgelist(nrs_selections, fts_selections)
+nrs_fts_edgelist <- prettify_edgelist(nrs_fts_edgelist)
+nrs_fts_edgelist <- add_attributes(nrs_fts_edgelist)
 
-# Create edgelists for unipartite network visualizations, add attributes
+# Create edgelists for unipartite group-group network visualizations, add attributes
 tj_tj_fts_edgelist <- create_edgelist(tj_selections, tj_selections)
-tj_tj_fts_edgelist <- prettify_edgelist(tj_tj_fts_edgelist)
-tj_tj_fts_edgelist <- add_unipartite_attributes(tj_tj_fts_edgelist)
+tj_tj_fts_edgelist <- prettify_edgelist_unipartite(tj_tj_fts_edgelist)
 tj_tj_fts_edgelist <- clean_unipartite(tj_tj_fts_edgelist)
+tj_tj_fts_edgelist <- add_unipartite_attributes(tj_tj_fts_edgelist)
 tj_tj_ats_edgelist <- create_edgelist(tj_selections, tj_selections)
-tj_tj_ats_edgelist <- prettify_edgelist(tj_tj_ats_edgelist)
-tj_tj_ats_edgelist <- add_unipartite_attributes(tj_tj_ats_edgelist)
+tj_tj_ats_edgelist <- prettify_edgelist_unipartite(tj_tj_ats_edgelist)
 tj_tj_ats_edgelist <- clean_unipartite(tj_tj_ats_edgelist)
+tj_tj_ats_edgelist <- add_unipartite_attributes(tj_tj_ats_edgelist)
 tj_tj_nrs_edgelist <- create_edgelist(tj_selections, tj_selections)
-tj_tj_nrs_edgelist <- prettify_edgelist(tj_tj_nrs_edgelist)
-tj_tj_nrs_edgelist <- add_unipartite_attributes(tj_tj_nrs_edgelist)
+tj_tj_nrs_edgelist <- prettify_edgelist_unipartite(tj_tj_nrs_edgelist)
 tj_tj_nrs_edgelist <- clean_unipartite(tj_tj_nrs_edgelist)
+tj_tj_nrs_edgelist <- add_unipartite_attributes(tj_tj_nrs_edgelist)
 tj_tj_sh_edgelist <- create_edgelist(tj_selections, tj_selections)
-tj_tj_sh_edgelist <- prettify_edgelist(tj_tj_sh_edgelist)
-tj_tj_sh_edgelist <- add_unipartite_attributes(tj_tj_sh_edgelist)
+tj_tj_sh_edgelist <- prettify_edgelist_unipartite(tj_tj_sh_edgelist)
 tj_tj_sh_edgelist <- clean_unipartite(tj_tj_sh_edgelist)
+tj_tj_sh_edgelist <- add_unipartite_attributes(tj_tj_sh_edgelist)
 tj_tj_psh_edgelist <- create_edgelist(tj_selections, tj_selections)
-tj_tj_psh_edgelist <- prettify_edgelist(tj_tj_psh_edgelist)
-tj_tj_psh_edgelist <- add_unipartite_attributes(tj_tj_psh_edgelist)
+tj_tj_psh_edgelist <- prettify_edgelist_unipartite(tj_tj_psh_edgelist)
 tj_tj_psh_edgelist <- clean_unipartite(tj_tj_psh_edgelist)
+tj_tj_psh_edgelist <- add_unipartite_attributes(tj_tj_psh_edgelist)
 ntj_ntj_fts_edgelist <- create_edgelist(ntj_selections, ntj_selections)
-ntj_ntj_fts_edgelist <- prettify_edgelist(ntj_ntj_fts_edgelist)
-ntj_ntj_fts_edgelist <- add_unipartite_attributes(ntj_ntj_fts_edgelist)
+ntj_ntj_fts_edgelist <- prettify_edgelist_unipartite(ntj_ntj_fts_edgelist)
 ntj_ntj_fts_edgelist <- clean_unipartite(ntj_ntj_fts_edgelist)
+ntj_ntj_fts_edgelist <- add_unipartite_attributes(ntj_ntj_fts_edgelist)
 ntj_ntj_ats_edgelist <- create_edgelist(ntj_selections, ntj_selections)
-ntj_ntj_ats_edgelist <- prettify_edgelist(ntj_ntj_ats_edgelist)
-ntj_ntj_ats_edgelist <- add_unipartite_attributes(ntj_ntj_ats_edgelist)
+ntj_ntj_ats_edgelist <- prettify_edgelist_unipartite(ntj_ntj_ats_edgelist)
 ntj_ntj_ats_edgelist <- clean_unipartite(ntj_ntj_ats_edgelist)
+ntj_ntj_ats_edgelist <- add_unipartite_attributes(ntj_ntj_ats_edgelist)
 ntj_ntj_nrs_edgelist <- create_edgelist(ntj_selections, ntj_selections)
-ntj_ntj_nrs_edgelist <- prettify_edgelist(ntj_ntj_nrs_edgelist)
-ntj_ntj_nrs_edgelist <- add_unipartite_attributes(ntj_ntj_nrs_edgelist)
+ntj_ntj_nrs_edgelist <- prettify_edgelist_unipartite(ntj_ntj_nrs_edgelist)
 ntj_ntj_nrs_edgelist <- clean_unipartite(ntj_ntj_nrs_edgelist)
+ntj_ntj_nrs_edgelist <- add_unipartite_attributes(ntj_ntj_nrs_edgelist)
 ntj_ntj_sh_edgelist <- create_edgelist(ntj_selections, ntj_selections)
-ntj_ntj_sh_edgelist <- prettify_edgelist(ntj_ntj_sh_edgelist)
-ntj_ntj_sh_edgelist <- add_unipartite_attributes(ntj_ntj_sh_edgelist)
+ntj_ntj_sh_edgelist <- prettify_edgelist_unipartite(ntj_ntj_sh_edgelist)
 ntj_ntj_sh_edgelist <- clean_unipartite(ntj_ntj_sh_edgelist)
+ntj_ntj_sh_edgelist <- add_unipartite_attributes(ntj_ntj_sh_edgelist)
 ntj_ntj_psh_edgelist <- create_edgelist(ntj_selections, ntj_selections)
-ntj_ntj_psh_edgelist <- prettify_edgelist(ntj_ntj_psh_edgelist)
-ntj_ntj_psh_edgelist <- add_unipartite_attributes(ntj_ntj_psh_edgelist)
+ntj_ntj_psh_edgelist <- prettify_edgelist_unipartite(ntj_ntj_psh_edgelist)
 ntj_ntj_psh_edgelist <- clean_unipartite(ntj_ntj_psh_edgelist)
+ntj_ntj_psh_edgelist <- add_unipartite_attributes(ntj_ntj_psh_edgelist)
 ag_ag_fts_edgelist <- create_edgelist(ag_selections, ag_selections)
-ag_ag_fts_edgelist <- prettify_edgelist(ag_ag_fts_edgelist)
-ag_ag_fts_edgelist <- add_unipartite_attributes(ag_ag_fts_edgelist)
+ag_ag_fts_edgelist <- prettify_edgelist_unipartite(ag_ag_fts_edgelist)
 ag_ag_fts_edgelist <- clean_unipartite(ag_ag_fts_edgelist)
+ag_ag_fts_edgelist <- add_unipartite_attributes(ag_ag_fts_edgelist)
 ag_ag_ats_edgelist <- create_edgelist(ag_selections, ag_selections)
-ag_ag_ats_edgelist <- prettify_edgelist(ag_ag_ats_edgelist)
-ag_ag_ats_edgelist <- add_unipartite_attributes(ag_ag_ats_edgelist)
+ag_ag_ats_edgelist <- prettify_edgelist_unipartite(ag_ag_ats_edgelist)
 ag_ag_ats_edgelist <- clean_unipartite(ag_ag_ats_edgelist)
+ag_ag_ats_edgelist <- add_unipartite_attributes(ag_ag_ats_edgelist)
 ag_ag_nrs_edgelist <- create_edgelist(ag_selections, ag_selections)
-ag_ag_nrs_edgelist <- prettify_edgelist(ag_ag_nrs_edgelist)
-ag_ag_nrs_edgelist <- add_unipartite_attributes(ag_ag_nrs_edgelist)
+ag_ag_nrs_edgelist <- prettify_edgelist_unipartite(ag_ag_nrs_edgelist)
 ag_ag_nrs_edgelist <- clean_unipartite(ag_ag_nrs_edgelist)
+ag_ag_nrs_edgelist <- add_unipartite_attributes(ag_ag_nrs_edgelist)
 ag_ag_sh_edgelist <- create_edgelist(ag_selections, ag_selections)
-ag_ag_sh_edgelist <- prettify_edgelist(ag_ag_sh_edgelist)
-ag_ag_sh_edgelist <- add_unipartite_attributes(ag_ag_sh_edgelist)
+ag_ag_sh_edgelist <- prettify_edgelist_unipartite(ag_ag_sh_edgelist)
 ag_ag_sh_edgelist <- clean_unipartite(ag_ag_sh_edgelist)
+ag_ag_sh_edgelist <- add_unipartite_attributes(ag_ag_sh_edgelist)
 ag_ag_psh_edgelist <- create_edgelist(ag_selections, ag_selections)
-ag_ag_psh_edgelist <- prettify_edgelist(ag_ag_psh_edgelist)
-ag_ag_psh_edgelist <- add_unipartite_attributes(ag_ag_psh_edgelist)
+ag_ag_psh_edgelist <- prettify_edgelist_unipartite(ag_ag_psh_edgelist)
 ag_ag_psh_edgelist <- clean_unipartite(ag_ag_psh_edgelist)
+ag_ag_psh_edgelist <- add_unipartite_attributes(ag_ag_psh_edgelist)
+
 
 
 ## Write edgelists to csv files
-setwd("/Users/gast/Desktop/THESIS/Repos/ma-thesis-shiny/input")
+newdir <- dir.create("input")
+setwd(paste0(getwd(),"/input"))
 # bipartite
 write2csv(tj_nrs_edgelist) 
 write2csv(ntj_nrs_edgelist)
@@ -494,6 +552,11 @@ write2csv(ag_sh_edgelist)
 write2csv(tj_psh_edgelist)
 write2csv(ntj_psh_edgelist)
 write2csv(ag_psh_edgelist)
+# bipartite - complementary 
+write2csv(sh_nrs_edgelist)
+write2csv(sh_psh_edgelist)
+write2csv(ats_fts_edgelist)
+write2csv(nrs_fts_edgelist)
 #unipartite
 write2csv(tj_tj_fts_edgelist)
 write2csv(tj_tj_ats_edgelist)
