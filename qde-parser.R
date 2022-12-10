@@ -228,11 +228,9 @@ add_unipartite_attributes <- function(x_y_z_edgelist) {
   } 
   if(z == "ats"){
     # add additional feature column only for attribute edgelist
-    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_ats_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation")) %>% 
-      left_join(eval(parse(text=paste0(x, "_fts_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation")) 
+    x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_ats_edgelist"))), by=c("source", "startpos", "issue", "group", "tempi", "type_of_statement", "past_present_relation")) 
     x_y_z_edgelist$relation <- NULL 
     colnames(x_y_z_edgelist)[9] <- "attribute"
-    colnames(x_y_z_edgelist)[10] <- "feature"
     # drop rows that have NA in attribute column
     x_y_z_edgelist <- filter(x_y_z_edgelist, !is.na(attribute))
   } 
