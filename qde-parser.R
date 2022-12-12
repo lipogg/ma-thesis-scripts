@@ -209,6 +209,9 @@ add_unipartite_attributes <- function(x_y_z_edgelist) {
   x <- str_match_all(searchstr, "[^_]*")[[1]][1,1] # access first match
   y <- str_match_all(searchstr, "[^_]*")[[1]][3,1] # access second match
   z <- str_match_all(searchstr, "[^_]*")[[1]][5,1] # access third match
+  # order elements in source and target column alphabetically to make sure order of groups/locations in 
+  # group column match source and target
+  x_y_z_edgelist <- transform(x_y_z_edgelist, source = pmin(source, target), target=pmax(source, target))
   # add tempi column, then type of statement column, then past-present relation column
   x_y_z_edgelist <- x_y_z_edgelist %>% left_join(eval(parse(text=paste0(x, "_tpi_edgelist"))), by=c("source", "startpos", "issue", "group")) %>%
     left_join(eval(parse(text=paste0(x, "_tos_edgelist"))), by=c("source", "startpos", "issue", "group")) %>%
@@ -264,8 +267,7 @@ add_unipartite_attributes <- function(x_y_z_edgelist) {
 clean_unipartite <- function(edgelist){
   # remove loops: edges where source and target value are the same
   edgelist <- edgelist[edgelist$source!=edgelist$target,]
-  # order elements in source and target column alphabetically
-  edgelist <- transform(edgelist, source = pmin(source, target), target=pmax(source, target))
+  rownames(edgelist) <- NULL
   # remove duplicates
   edgelist <- edgelist %>% 
     distinct(across(-group), .keep_all=TRUE) 
